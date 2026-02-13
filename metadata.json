@@ -1,0 +1,8 @@
+{
+  "name": "Agri-Yield Smart Assistant",
+  "description": "AI-powered farming assistant for yield prediction, weather risk analysis, and personalized advisory for Indian farmers.",
+  "requestFramePermissions": [
+    "microphone",
+    "geolocation"
+  ]
+}
