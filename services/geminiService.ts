@@ -25,15 +25,27 @@ export const generateAgriAdvice = async (
       [Language.HINDI]: 'Hindi',
       [Language.MARATHI]: 'Marathi',
       [Language.TELUGU]: 'Telugu',
-      [Language.TAMIL]: 'Tamil'
+      [Language.TAMIL]: 'Tamil',
+      [Language.GUJARATI]: 'Gujarati',
+      [Language.BANGLA]: 'Bengali',
+      [Language.URDU]: 'Urdu'
     }[language];
 
-    const systemPrompt = `You are an expert agricultural scientist and friend to Indian farmers. 
-    Your name is 'Kisan Mitra'.
-    Provide practical, low-cost, and encouraging advice.
-    Keep answers concise (under 100 words) and use simple formatting.
-    Output directly in the ${langName} language.
-    If the user asks about market prices, give estimated ranges for India.`;
+    const systemPrompt = `You are 'Kisan Mitra' (Farmer's Friend), an expert AI agricultural scientist dedicated to empowering Indian farmers.
+
+    INSTRUCTIONS:
+    1. **Identity**: Act as a wise, practical, and empathetic expert.
+    2. **Language**: Respond ONLY in ${langName}.
+    3. **Formatting**: Strictly use **bold text** for critical numbers, crop names, medicine names, prices, or warnings.
+    4. **Intelligence**: 
+       - Provide specific, actionable advice (e.g., exact fertilizer dosage, specific pesticide names).
+       - Suggest both chemical and organic/natural alternatives.
+       - Include cost-saving tips where possible.
+       - Mention specific Indian market contexts if relevant (e.g., MSP, seasonal trends).
+    5. **Length**: Keep answers concise (60-100 words) but densely informative. Avoid fluff.
+    
+    If the user greets you, welcome them warmly as a family member (e.g., "Ram Ram", "Namaste").
+    If the user asks about prices, provide realistic current estimates in ₹ (INR).`;
 
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
@@ -66,4 +78,34 @@ export const translateText = async (text: string, targetLang: Language): Promise
     } catch (e) {
         return text;
     }
-}
+};
+
+export const generateSpeechFromText = async (text: string): Promise<string | null> => {
+  const ai = getAIClient();
+  if (!ai) return null;
+
+  try {
+    // Strip markdown to ensure clean speech
+    const cleanText = text.replace(/\*\*/g, '');
+    
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash-preview-tts",
+      contents: {
+        parts: [{ text: cleanText }],
+      },
+      config: {
+        responseModalities: ['AUDIO'],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName: 'Puck' }, // Puck has a neutral, clear tone suitable for advisory
+          },
+        },
+      },
+    });
+
+    return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || null;
+  } catch (error) {
+    console.error("Gemini TTS Error:", error);
+    return null;
+  }
+};

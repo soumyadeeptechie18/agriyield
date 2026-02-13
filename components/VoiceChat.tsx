@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ChatMessage, Language } from '../types';
-import { generateAgriAdvice } from '../services/geminiService';
+import { generateAgriAdvice, generateSpeechFromText } from '../services/geminiService';
 import { TRANSLATIONS } from '../constants';
-import { Mic, Send, Volume2, User, Bot } from 'lucide-react';
+import { Mic, Send, Volume2, User, Bot, Loader2 } from 'lucide-react';
 
 interface Props {
   language: Language;
@@ -20,6 +20,7 @@ const VoiceChat: React.FC<Props> = ({ language }) => {
   const [input, setInput] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const t = TRANSLATIONS[language];
@@ -45,6 +46,9 @@ const VoiceChat: React.FC<Props> = ({ language }) => {
       [Language.MARATHI]: 'mr-IN',
       [Language.TELUGU]: 'te-IN',
       [Language.TAMIL]: 'ta-IN',
+      [Language.GUJARATI]: 'gu-IN',
+      [Language.BANGLA]: 'bn-IN',
+      [Language.URDU]: 'ur-IN',
     };
     
     recognition.lang = langMap[language];
@@ -67,14 +71,77 @@ const VoiceChat: React.FC<Props> = ({ language }) => {
     recognition.start();
   };
 
-  const speakText = (text: string) => {
+  const decodeBase64 = (base64: string) => {
+    const binaryString = atob(base64);
+    const len = binaryString.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes;
+  };
+
+  const pcmToAudioBuffer = (
+    data: Uint8Array,
+    ctx: AudioContext,
+    sampleRate: number = 24000
+  ): AudioBuffer => {
+    // Handle potential odd byte length
+    let pcm16: Int16Array;
+    if (data.byteLength % 2 !== 0) {
+      const newBuffer = new Uint8Array(data.byteLength + 1);
+      newBuffer.set(data);
+      pcm16 = new Int16Array(newBuffer.buffer);
+    } else {
+      pcm16 = new Int16Array(data.buffer);
+    }
+
+    const buffer = ctx.createBuffer(1, pcm16.length, sampleRate);
+    const channelData = buffer.getChannelData(0);
+    
+    // Convert Int16 to Float32
+    for (let i = 0; i < pcm16.length; i++) {
+      channelData[i] = pcm16[i] / 32768.0;
+    }
+    
+    return buffer;
+  };
+
+  const speakText = async (text: string) => {
+    // 1. Try Gemini API for high quality multilingual TTS
+    setIsPlayingAudio(true);
+    const audioData = await generateSpeechFromText(text);
+    
+    if (audioData) {
+      try {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        const audioContext = new AudioContextClass({ sampleRate: 24000 });
+        
+        const pcmBytes = decodeBase64(audioData);
+        const audioBuffer = pcmToAudioBuffer(pcmBytes, audioContext, 24000);
+        
+        const source = audioContext.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(audioContext.destination);
+        source.onended = () => setIsPlayingAudio(false);
+        source.start(0);
+        return; // Success
+      } catch (e) {
+        console.error("Audio playback error", e);
+        // Fallthrough
+      }
+    }
+
+    // 2. Fallback to Browser TTS (Low quality but works offline-ish)
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      // Try to match language
-      // Note: Browser support for Indian languages varies
+      const cleanText = text.replace(/\*\*/g, '');
+      const utterance = new SpeechSynthesisUtterance(cleanText);
       utterance.lang = language === 'en' ? 'en-IN' : language + '-IN'; 
+      utterance.onend = () => setIsPlayingAudio(false);
       window.speechSynthesis.speak(utterance);
+    } else {
+      setIsPlayingAudio(false);
     }
   };
 
@@ -93,7 +160,7 @@ const VoiceChat: React.FC<Props> = ({ language }) => {
     setInput('');
     setIsLoading(true);
 
-    // Call Gemini
+    // Call Gemini for Text
     const responseText = await generateAgriAdvice(textToSend, language);
     
     const newBotMsg: ChatMessage = {
@@ -106,8 +173,22 @@ const VoiceChat: React.FC<Props> = ({ language }) => {
     setMessages(prev => [...prev, newBotMsg]);
     setIsLoading(false);
     
-    // Auto-speak response if the user used voice (simulated logic: if listening was recently active)
-    // For this demo, we add a manual speaker button instead for better UX control
+    // Auto-speak response if the user used voice (indicated by textOverride being present)
+    if (textOverride) {
+      speakText(responseText);
+    }
+  };
+
+  // Helper to render bold text
+  const renderMessageText = (text: string) => {
+    // Split by **text**
+    const parts = text.split(/(\*\*.*?\*\*)/g);
+    return parts.map((part, index) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={index} className="font-bold text-agri-900">{part.slice(2, -2)}</strong>;
+      }
+      return <span key={index}>{part}</span>;
+    });
   };
 
   return (
@@ -116,7 +197,14 @@ const VoiceChat: React.FC<Props> = ({ language }) => {
         <h3 className="font-bold text-lg flex items-center gap-2">
           <Bot size={24} /> Kisan Mitra AI
         </h3>
-        <span className="text-xs bg-agri-700 px-2 py-1 rounded">Online</span>
+        <span className="flex items-center gap-2">
+            {isPlayingAudio && <span className="flex gap-1 h-3 items-end">
+                <span className="w-1 h-2 bg-white animate-bounce"></span>
+                <span className="w-1 h-3 bg-white animate-bounce delay-100"></span>
+                <span className="w-1 h-1 bg-white animate-bounce delay-200"></span>
+            </span>}
+            <span className="text-xs bg-agri-700 px-2 py-1 rounded">Online</span>
+        </span>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[url('https://www.transparenttextures.com/patterns/graphy.png')]">
@@ -132,14 +220,17 @@ const VoiceChat: React.FC<Props> = ({ language }) => {
                   : 'bg-white text-gray-800 rounded-tl-none border border-gray-100'
               }`}
             >
-              <p className="text-sm md:text-base leading-relaxed">{msg.text}</p>
+              <div className="text-sm md:text-base leading-relaxed">
+                {renderMessageText(msg.text)}
+              </div>
               {msg.role === 'model' && (
                 <button 
                   onClick={() => speakText(msg.text)}
-                  className="absolute -right-8 top-1 text-gray-400 hover:text-agri-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                  disabled={isPlayingAudio}
+                  className="absolute -right-8 top-1 text-gray-400 hover:text-agri-600 opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-30"
                   title="Read Aloud"
                 >
-                  <Volume2 size={18} />
+                  {isPlayingAudio ? <Loader2 className="animate-spin" size={18} /> : <Volume2 size={18} />}
                 </button>
               )}
             </div>

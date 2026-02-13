@@ -79,6 +79,9 @@ export default function App() {
                <button onClick={() => setCurrentLang(Language.ENGLISH)} className={`text-xs px-2 py-1 rounded border ${currentLang === 'en' ? 'bg-agri-600 text-white' : 'bg-white'}`}>EN</button>
                <button onClick={() => setCurrentLang(Language.HINDI)} className={`text-xs px-2 py-1 rounded border ${currentLang === 'hi' ? 'bg-agri-600 text-white' : 'bg-white'}`}>HI</button>
                <button onClick={() => setCurrentLang(Language.MARATHI)} className={`text-xs px-2 py-1 rounded border ${currentLang === 'mr' ? 'bg-agri-600 text-white' : 'bg-white'}`}>MR</button>
+               <button onClick={() => setCurrentLang(Language.GUJARATI)} className={`text-xs px-2 py-1 rounded border ${currentLang === 'gu' ? 'bg-agri-600 text-white' : 'bg-white'}`}>GU</button>
+               <button onClick={() => setCurrentLang(Language.BANGLA)} className={`text-xs px-2 py-1 rounded border ${currentLang === 'bn' ? 'bg-agri-600 text-white' : 'bg-white'}`}>BN</button>
+               <button onClick={() => setCurrentLang(Language.URDU)} className={`text-xs px-2 py-1 rounded border ${currentLang === 'ur' ? 'bg-agri-600 text-white' : 'bg-white'}`}>UR</button>
             </div>
           </div>
 

@@ -3,7 +3,10 @@ export enum Language {
   HINDI = 'hi',
   MARATHI = 'mr',
   TELUGU = 'te',
-  TAMIL = 'ta'
+  TAMIL = 'ta',
+  GUJARATI = 'gu',
+  BANGLA = 'bn',
+  URDU = 'ur'
 }
 
 export interface WeatherData {
